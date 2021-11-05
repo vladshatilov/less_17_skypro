@@ -45,7 +45,7 @@ def hello_world():
 # Доработайте представление так, чтобы оно возвращало только фильмы с определенным НАЗВАНИЕМ по запросу типа `/movies/?title=1`.
 # Доработайте представление так, чтобы оно возвращало только фильмы с определенным НАЗВАНИЕМ и жанром по запросу типа /movies/?title=green&genre=12.
 @movies_route.route('/')
-class Movies_route(Resource):
+class Movies_route_json(Resource):
     def get(self):
         # http://127.0.0.1:5000/movies/?genre=12&title=green get all movies in genre "action" (like condition) with title like "green"
         all_movies = db.session.query(Movies.id, Movies.title, Movies.genre_ids, Genres.genre_name.label('genre_name'),
@@ -115,7 +115,7 @@ class Movies_route(Resource):
 ### Шаг 2
 # - `/movies/<id>` — возвращает подробную информацию о фильме.
 @movies_route.route('/<int:mid>')
-class Movie_route(Resource):
+class Movie_route_json(Resource):
     def get(self, mid):
         movie_container = Movies.query.get(mid)
         if movie_container is not None:
@@ -165,7 +165,7 @@ class Movie_route(Resource):
 
 
 @genres_route.route('/')
-class Genres_route(Resource):
+class Genres_route_json(Resource):
     def get(self):
         genres_list = Genres.query.order_by(Genres.genre_name).all()
         return genres_schema.dump(genres_list), 200
@@ -187,7 +187,7 @@ class Genres_route(Resource):
 
 
 @genres_route.route('/<int:uid>')
-class Genre_route(Resource):
+class Genre_route_json(Resource):
     def get(self, uid):
         genre_ = Genres.query.get(uid)
         if genre_ is not None:
