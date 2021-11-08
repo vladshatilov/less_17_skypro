@@ -1,6 +1,6 @@
 import json
 
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_restx import Api, Resource
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import ForeignKey, desc
@@ -9,7 +9,7 @@ from sqlalchemy.orm import relationship
 from components.db import db, create_app
 from components.models import Movies, Genres
 from components.fill_db_func import fill_db_simple, fill_db
-from components.marshmallow_schemas import MoviesSchema, GenresSchema
+from components.schemas import MoviesSchema, GenresSchema
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///Q:/react_apps/flask/flaskProject_lesson17/test.db'
@@ -20,8 +20,8 @@ db.init_app(app)
 with app.app_context():
     db.drop_all()
     db.create_all()
-    fill_db(Movies, 'movies.json', db)
     fill_db_simple(Genres, 'genres.json', db)
+    fill_db(Movies, 'movies.json', db)
 
 movie_schema = MoviesSchema()
 movies_schema = MoviesSchema(many=True)
@@ -41,32 +41,27 @@ def hello_world():
 ### Шаг 2
 # Установите Flask-RESTX, создайте CBV для обработки GET-запроса.
 # Напишите сериализацию модели `Movie`.
-# Установите Flask-RESTX, создайте CBV для обработки GET-запроса.
-# Доработайте представление так, чтобы оно возвращало только фильмы с определенным НАЗВАНИЕМ по запросу типа `/movies/?title=1`.
-# Доработайте представление так, чтобы оно возвращало только фильмы с определенным НАЗВАНИЕМ и жанром по запросу типа /movies/?title=green&genre=12.
 @movies_route.route('/')
 class Movies_route_json(Resource):
     def get(self):
         # http://127.0.0.1:5000/movies/?genre=12&title=green get all movies in genre "action" (like condition) with title like "green"
-        all_movies = db.session.query(Movies.id, Movies.title, Movies.genre_ids, Genres.genre_name.label('genre_name'),
-                                      Movies.release_date).outerjoin(Genres, Movies.genre_ids == Genres.id,
-                                                                     isouter=True).filter(Movies.title.like(
-            '%{0}%'.format(request.args.get('title') if request.args.get('title') is not None else '')),
-                                                                                          (
-                                                                                              Movies.genre_ids == request.args.get(
-                                                                                                  'genre') if request.args.get(
-                                                                                                  'genre') is not None else 1 == 1)
-                                                                                          ).order_by(
-            desc(Movies.release_date)).all()
 
-        # Test create_engine
-        # dd = create_engine(r'sqlite:///Q:\react_apps\flask\flaskProject_lesson17\test.db')
-        # sql_text = ('''select t1.title, substr(t2.genre_name,1,2) , t1.genre_ids, t2.id
-        # from movies t1
-        # left join genres t2 on t1.genre_ids=t2.id''')
-        #
-        # all_movies = dd.execute(sql_text).fetchall()
-        return movies_schema.dump(all_movies), 200
+        if request.args.get('genre') is not None:
+            all_movies = db.session.query(Movies.id, Movies.title,
+                                          Genres.genre_name.label('genre_name'),
+                                          Movies.release_date
+                                          ).join(Genres, Movies.genres).filter(
+                                                Movies.title.like('%{0}%'.format(request.args.get('title') if request.args.get('title') is not None else '')),
+                                                (Genres.id == request.args.get('genre') if request.args.get('genre') is not None else 1 == 1)
+                                            ).order_by(desc(Movies.release_date)).all()
+        else:
+            all_movies = db.session.query(Movies.id, Movies.title,
+                                          Movies.release_date
+                                          ).filter(
+                                                Movies.title.like('%{0}%'.format(request.args.get('title') if request.args.get('title') is not None else ''))
+                                            ).order_by(desc(Movies.release_date)).all()
+
+        return jsonify(movies_schema.dump(all_movies))
 
     def post(self):
         movies_temp = request.data  # .to_dict()
@@ -74,16 +69,13 @@ class Movies_route_json(Resource):
 
         # Проверенный рабочий запрос
         # POST http://127.0.0.1:5000/movies/
-        # Accept: * / *
-        # Cache - Control: no - cache
-        #
         # {"video": false, "vote_average": 7.0,
-        #  "overview": "A dysfunctional couple head to a remote lakeside cabin under the guise of reconnecting, but each has secret designs to kill the other. Before they can carry out their respective plans, unexpected visitors arrive and the couple is faced with a greater danger than anything they could have plotted.",
-        #  "release_date": "2021-07-30", "vote_count": 84, "adult": false,
-        #  "backdrop_path": "/1yJ8wBmWyEM24UFUSDaRHJFMPPL.jpg", "title": "The Trip", "genre_ids": [28, 35, 53, 27],
-        #  "id": 760747, "original_language": "no", "original_title": "I onde dager",
-        #  "poster_path": "/uXGoV9IgKChvN7UGMj01y3purGc.jpg", "popularity": 1283.786, "media_type": "movie"}
-
+        #          "overview": "A dysfunctional couple",
+        #          "release_date": "2021-07-30", "vote_count": 84, "adult": false,
+        #          "backdrop_path": "/1yJ8wBmWyEM24UFUSDaRHJFMPPL.jpg", "title": "The Ptica", "genre_ids": [12, 14, 53, 27],
+        #          "id": 12, "original_language": "no", "original_title": "I onde dager",
+        #          "poster_path": "/uXGoV9IgKChvN7UGMj01y3purGc.jpg", "popularity": 1283.786, "media_type": "movie"}
+        print(movies_list)
         new_movie = Movies(
             video=movies_list.get('video'),
             vote_average=movies_list.get('vote_average'),
@@ -93,11 +85,8 @@ class Movies_route_json(Resource):
             adult=movies_list.get('adult'),
             backdrop_path=movies_list.get('backdrop_path'),
             title=movies_list.get('title') or movies_list.get('name'),
-            genre_ids=movies_list.get('genre_ids')[0] if movies_list.get('genre_ids') is not None else None,
+            # genre_ids=movies_list.get('genre_ids')[0] if movies_list.get('genre_ids') is not None else None,
             id=movies_list.get('id'),
-            # name =ies_list[i].get('name'),
-            # original_name =ies_list[i].get('original_name'),
-            # origin_country =e if movies_list[i].get('origin_country',None) is None else movies_list[i].get('origin_country')[0],
             origin_country=movies_list.get('origin_country')[0] if movies_list.get(
                 'origin_country') is not None else None,
             first_air_date=movies_list.get('first_air_date'),
@@ -107,6 +96,12 @@ class Movies_route_json(Resource):
             popularity=movies_list.get('popularity'),
             media_type=movies_list.get('media_type')
         )
+        if movies_list.get('genre_ids') is not None:
+            for i in movies_list.get('genre_ids'):
+                c1 = Genres.query.get(i)
+                new_movie.genres.append(c1)
+                db.session.add(new_movie)
+                db.session.commit()
         with db.session.begin():
             db.session.add(new_movie)
         return "", 201
@@ -119,7 +114,7 @@ class Movie_route_json(Resource):
     def get(self, mid):
         movie_container = Movies.query.get(mid)
         if movie_container is not None:
-            return movie_schema.dump(movie_container), 200
+            return jsonify(movie_schema.dump(movie_container))
         else:
             return "incorrect id", 404
 
@@ -127,11 +122,8 @@ class Movie_route_json(Resource):
         movie_to_change = Movies.query.get(mid)
         new_movie_parameters = json.loads(request.data.decode('utf-8'))
 
-        # Проверенный рабочий запрос
+        # Проверенный запрос
         # POST http://127.0.0.1:5000/movies/642684
-        # Accept: */*
-        # Cache - Control: no - cache
-        #
         # {"adult": true, "backdrop_path": "/cthCF9Me0LViWbKYTd06DKm9WIH.jpg", "vote_count": 224,
         #  "original_language": "fr", "original_title": "OpérationPortugal",
         #  "poster_path": "/dnR42jxXOWmwrBsn1S9AWRnWNGB.jpg", "release_date": "2021-06-23", "video": false,
@@ -147,8 +139,8 @@ class Movie_route_json(Resource):
         movie_to_change.adult = new_movie_parameters.get('adult')
         movie_to_change.backdrop_path = new_movie_parameters.get('backdrop_path')
         movie_to_change.title = new_movie_parameters.get('title') or new_movie_parameters.get('name')
-        movie_to_change.genre_ids = new_movie_parameters.get('genre_ids')[0] if new_movie_parameters.get(
-            'genre_ids') is not None else None
+        # movie_to_change.genre_ids = new_movie_parameters.get('genre_ids')[0] if new_movie_parameters.get(
+        #     'genre_ids') is not None else None
         movie_to_change.id = new_movie_parameters.get('id')
         movie_to_change.origin_country = new_movie_parameters.get('origin_country')[0] if new_movie_parameters.get(
             'origin_country') is not None else None
@@ -168,16 +160,13 @@ class Movie_route_json(Resource):
 class Genres_route_json(Resource):
     def get(self):
         genres_list = Genres.query.order_by(Genres.genre_name).all()
-        return genres_schema.dump(genres_list), 200
+        return jsonify(genres_schema.dump(genres_list))
 
     def post(self):
         genre_for_change = json.loads(request.data.decode('utf-8'))
 
         # Проверенный рабочий запрос
         # POST http://127.0.0.1:5000/genres/
-        # Accept: */*
-        # Cache - Control: no - cache
-        #
         # {"id": 13, "genre_name": "Second"}
 
         new_genre = Genres(id=genre_for_change['id'], genre_name=genre_for_change['genre_name'])
@@ -191,7 +180,7 @@ class Genre_route_json(Resource):
     def get(self, uid):
         genre_ = Genres.query.get(uid)
         if genre_ is not None:
-            return genres_schema.dump(genre_), 200
+            return jsonify(genre_schema.dump(genre_))
         else:
             return "incorrect id", 404
 
@@ -201,9 +190,6 @@ class Genre_route_json(Resource):
 
         # Проверенный рабочий запрос
         # POST http://127.0.0.1:5000/genres/12
-        # Accept: */*
-        # Cache - Control: no - cache
-        #
         # {"id": 12, "genre_name": "Second"}
 
         genre_.id = genre_for_change['id']

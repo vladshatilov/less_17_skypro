@@ -21,7 +21,6 @@ class MoviesSchema(Schema):
     poster_path = fields.String()
     popularity = fields.Float()
     media_type = fields.String()
-    ######  Сколько же я потратил времени на то, чтобы допереть, что сюда нужно добавить следующее поле
     genre_name = fields.String()
 
 
